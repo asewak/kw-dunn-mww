@@ -11,7 +11,7 @@
 # simply resubmitted.
 
 cfg <- list(
-  reps        = 5,                         # replications per scenario (small for testing)
+  reps        = 1000,                      # replications per scenario (small for testing)
   n1_grid     = c(5, 15, 30, 50, 100),     # n1 = n2
   ratio_grid  = c(0.5, 1, 2, 4),           # n3 / n1
   mu3_grid    = c(0, 0.5, 1, 2, 3),        # location of group 3 (location, skewed)
@@ -32,7 +32,7 @@ source("R/dgps.R")
 source("R/methods.R")
 source("R/outputs.R")
 
-# ---- command-line arguments ------------------------------------------------
+# command-line arguments
 args <- strsplit(commandArgs(trailingOnly = TRUE), "=", fixed = TRUE)
 arg <- function(name, default) {
   hit <- Filter(function(a) a[1] == name, args)
@@ -44,7 +44,7 @@ chunk   <- as.integer(arg("chunk", 1))
 nchunks <- as.integer(arg("nchunks", 1))
 stopifnot(mode %in% c("all", "run", "combine"), chunk >= 1, chunk <= nchunks)
 
-# ---- 1 & 2. data + methods (per scenario files; restartable) ----------------
+# 1 & 2. data + methods (per scenario files; restartable)
 if (mode %in% c("all", "run")) {
   for (n1 in n1_run) {
     ids <- design_for_n1(cfg, n1)$scenario_id
@@ -55,7 +55,7 @@ if (mode %in% c("all", "run")) {
   }
 }
 
-# ---- 3. outputs ------------------------------------------------------------
+# 3. outputs
 if (mode %in% c("all", "combine")) {
   results <- load_results(cfg)
   saveRDS(list(cfg = cfg, results = results),
@@ -65,5 +65,6 @@ if (mode %in% c("all", "combine")) {
   save_rejection_csv(rej, cfg)
   save_provenance(cfg)
   save_all_plots(rej, cfg)
+  save_summary_plots(rej, cfg)
   message("Done. Plots and CSV in ", cfg$output_dir)
 }

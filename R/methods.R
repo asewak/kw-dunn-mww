@@ -4,8 +4,11 @@
 # Methods:
 #   kw        stats::kruskal.test on all three groups (reported only in global null)
 #   kw2step   KW rejects AND Dunn 1 vs 2 rejects (formed in outputs.R)
+#   kwwilcox  KW rejects AND Wilcoxon 1 vs 2 rejects (formed in outputs.R)
 #   wilcox    stats::wilcox.test, 1 vs 2 (ranks from the pair only)
 #   dunn      dunn.test::dunn.test, 1 vs 2 (ranks pooled over all three groups)
+#   pairt     stats::pairwise.t.test, 1 vs 2 (SD pooled over all three groups)
+#   pairt_np  pairwise.t.test with pool.sd = FALSE (Welch t-test on groups 1, 2 only)
 
 # Dunn's test from the dunn.test package. We take the Z statistics, form
 # two-sided p-values ourselves (dunn.test returns one-sided P by default) and
@@ -23,15 +26,26 @@ dunn_pvals <- function(y, g, p_adjust = "none") {
   p.adjust(2 * pnorm(-abs(d$Z[ord])), method = p_adjust)
 }
 
+# Pairwise t-tests with the SD pooled over all three groups (the parametric
+# analogue of Dunn's pooled ranks). Unadjusted p-values are taken from
+# pairwise.t.test and adjusted here across the 3 pairs, as for Dunn.
+# Element 1 is the 1 vs 2 comparison.
+pairwise_t_pvals <- function(y, g, p_adjust = "none", pool.sd = TRUE) {
+  pv <- pairwise.t.test(y, g, p.adjust.method = "none", pool.sd = pool.sd)$p.value
+  p.adjust(c(pv["2", "1"], pv["3", "1"], pv["3", "2"]), method = p_adjust)
+}
+
 # All methods on one replicate; returns named vector of p-values.
 run_methods <- function(y, n, p_adjust = "none") {
   g <- rep(1:3, times = n)
   c(kw     = kruskal.test(y, g)$p.value,
     wilcox = wilcox.test(y[g == 1], y[g == 2])$p.value,
-    dunn   = dunn_pvals(y, g, p_adjust)[1])
+    dunn   = dunn_pvals(y, g, p_adjust)[1],
+    pairt  = pairwise_t_pvals(y, g, p_adjust, pool.sd = TRUE)[1],
+    pairt_np = pairwise_t_pvals(y, g, p_adjust, pool.sd = FALSE)[1])
 }
 
-# Run all replicates of one scenario. Returns a reps x 3 matrix of p-values.
+# Run all replicates of one scenario. Returns a reps x 5 matrix of p-values.
 run_scenario <- function(datalist, n, cfg) {
   # forking costs ~0.2s per call, which swamps the work at small reps, so
   # only use multiple cores when there are enough replications to pay for it.
@@ -52,7 +66,7 @@ pvals_path <- function(cfg, n1, id)
   file.path(cfg$results_dir, sprintf("n1_%d", n1), sprintf("pvals_%04d.rds", id))
 
 # The p-values depend on the data and on the Dunn adjustment.
-pvals_key <- function(cfg) paste(data_key(cfg), cfg$dunn_p_adjust)
+pvals_key <- function(cfg) paste(data_key(cfg), cfg$dunn_p_adjust, "methods-v3-pairt-np")
 
 # Run the methods for the given scenario ids of one n1, saving one p-value
 # file per scenario. Existing current files are skipped (restart after a crash).
