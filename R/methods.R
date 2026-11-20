@@ -26,6 +26,14 @@ dunn_pvals <- function(y, g, p_adjust = "none") {
   p.adjust(2 * pnorm(-abs(d$Z[ord])), method = p_adjust)
 }
 
+# Raw p-values of the three pairs, always in the order 1-2, 1-3, 2-3.
+pair_names <- c("12", "13", "23")
+
+wilcox_pvals <- function(y, g)
+  c(wilcox.test(y[g == 1], y[g == 2])$p.value,
+    wilcox.test(y[g == 1], y[g == 3])$p.value,
+    wilcox.test(y[g == 2], y[g == 3])$p.value)
+
 # Pairwise t-tests with the SD pooled over all three groups (the parametric
 # analogue of Dunn's pooled ranks). Unadjusted p-values are taken from
 # pairwise.t.test and adjusted here across the 3 pairs, as for Dunn.
@@ -35,25 +43,29 @@ pairwise_t_pvals <- function(y, g, p_adjust = "none", pool.sd = TRUE) {
   p.adjust(c(pv["2", "1"], pv["3", "1"], pv["3", "2"]), method = p_adjust)
 }
 
-# All methods on one replicate; returns named vector of p-values.
-run_methods <- function(y, n, p_adjust = "none") {
+# All methods on one replicate; returns a named vector of RAW (unadjusted)
+# p-values: kw, and <method>_<pair> for all three pairs (12, 13, 23) of
+# wilcox, dunn, pairt, pairt_np. Multiplicity adjustment (Holm etc.) is done
+# afterwards in outputs.R.
+run_methods <- function(y, n) {
   g <- rep(1:3, times = n)
-  c(kw     = kruskal.test(y, g)$p.value,
-    wilcox = wilcox.test(y[g == 1], y[g == 2])$p.value,
-    dunn   = dunn_pvals(y, g, p_adjust)[1],
-    pairt  = pairwise_t_pvals(y, g, p_adjust, pool.sd = TRUE)[1],
-    pairt_np = pairwise_t_pvals(y, g, p_adjust, pool.sd = FALSE)[1])
+  p <- c(kw = kruskal.test(y, g)$p.value,
+         wilcox   = wilcox_pvals(y, g),
+         dunn     = dunn_pvals(y, g, "none"),
+         pairt    = pairwise_t_pvals(y, g, "none", pool.sd = TRUE),
+         pairt_np = pairwise_t_pvals(y, g, "none", pool.sd = FALSE))
+  names(p) <- c("kw", paste(rep(c("wilcox", "dunn", "pairt", "pairt_np"),
+                                each = 3), pair_names, sep = "_"))
+  p
 }
 
-# Run all replicates of one scenario. Returns a reps x 5 matrix of p-values.
+# Run all replicates of one scenario. Returns a reps x 13 matrix of raw p-values.
 run_scenario <- function(datalist, n, cfg) {
   # forking costs ~0.2s per call, which swamps the work at small reps, so
   # only use multiple cores when there are enough replications to pay for it.
   # This is the only mclapply in the pipeline (never nested).
   cores <- if (length(datalist) >= cfg$parallel_min_reps) cfg$mc_cores else 1
-  res <- parallel::mclapply(datalist, run_methods, n = n,
-                            p_adjust = cfg$dunn_p_adjust,
-                            mc.cores = cores)
+  res <- parallel::mclapply(datalist, run_methods, n = n, mc.cores = cores)
   # mclapply returns try-error objects (or NULL) instead of stopping when a
   # worker fails; surface the first real error rather than a cryptic rbind
   bad <- !vapply(res, is.numeric, logical(1))
@@ -65,8 +77,8 @@ run_scenario <- function(datalist, n, cfg) {
 pvals_path <- function(cfg, n1, id)
   file.path(cfg$results_dir, sprintf("n1_%d", n1), sprintf("pvals_%04d.rds", id))
 
-# The p-values depend on the data and on the Dunn adjustment.
-pvals_key <- function(cfg) paste(data_key(cfg), cfg$dunn_p_adjust, "methods-v3-pairt-np")
+# The (raw) p-values depend only on the data; adjustment happens in outputs.R.
+pvals_key <- function(cfg) paste(data_key(cfg), "methods-v4-raw-allpairs")
 
 # Run the methods for the given scenario ids of one n1, saving one p-value
 # file per scenario. Existing current files are skipped (restart after a crash).

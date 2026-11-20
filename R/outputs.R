@@ -2,6 +2,16 @@
 
 library(ggplot2)
 
+# Adjust the raw p-values of one method across its 3 pairs, row by row
+# (replicate by replicate). Returns a reps x 3 matrix with columns 12, 13, 23.
+# `method` = "holm", "bonferroni", "none", ... (anything p.adjust accepts).
+adjust_pairs <- function(p, m, method = "none") {
+  raw <- p[, paste(m, c("12", "13", "23"), sep = "_"), drop = FALSE]
+  adj <- if (method == "none") raw else t(apply(raw, 1, p.adjust, method = method))
+  colnames(adj) <- c("12", "13", "23")
+  adj
+}
+
 # Combine results (list over n1) into one long data frame of rejection rates.
 extract_rejections <- function(results, cfg) {
   a <- cfg$alpha
@@ -9,13 +19,17 @@ extract_rejections <- function(results, cfg) {
     d <- res$design
     do.call(rbind, lapply(seq_len(nrow(d)), function(i) {
       p <- res$pvals[[i]]
+      # 1 vs 2 p-value of a method, adjusted across its 3 pairs
+      # (cfg$dunn_p_adjust, default none; as before Wilcoxon is not adjusted)
+      p12 <- function(m) adjust_pairs(p, m, cfg$dunn_p_adjust)[, "12"]
+      dunn <- p12("dunn")
       rate <- c(KW = mean(p[, "kw"] < a),
-                "KW two-step" = mean(p[, "kw"] < a & p[, "dunn"] < a),
-                "KW + Wilcoxon" = mean(p[, "kw"] < a & p[, "wilcox"] < a),
-                Wilcoxon = mean(p[, "wilcox"] < a),
-                Dunn = mean(p[, "dunn"] < a),
-                "Pairwise t" = mean(p[, "pairt"] < a),
-                "Pairwise t (no pool)" = mean(p[, "pairt_np"] < a))
+                "KW two-step" = mean(p[, "kw"] < a & dunn < a),
+                "KW + Wilcoxon" = mean(p[, "kw"] < a & p[, "wilcox_12"] < a),
+                Wilcoxon = mean(p[, "wilcox_12"] < a),
+                Dunn = mean(dunn < a),
+                "Pairwise t" = mean(p12("pairt") < a),
+                "Pairwise t (no pool)" = mean(p12("pairt_np") < a))
       # KW alone is only meaningful under the global null
       global_null <- d$delta[i] == 0 && d$family[i] != "skewed" &&
         d$mu3[i] == 0 && d$sigma3[i] == 1

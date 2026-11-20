@@ -11,7 +11,7 @@
 # simply resubmitted.
 
 cfg <- list(
-  reps        = 1000,                      # replications per scenario (small for testing)
+  reps        = 10000,                      # replications per scenario (small for testing)
   n1_grid     = c(5, 15, 30, 50, 100),     # n1 = n2
   ratio_grid  = c(0.5, 1, 2, 4),           # n3 / n1
   mu3_grid    = c(0, 0.5, 1, 2, 3),        # location of group 3 (location, skewed)
@@ -31,6 +31,7 @@ cfg <- list(
 source("R/dgps.R")
 source("R/methods.R")
 source("R/outputs.R")
+source("R/main_plots.R")
 
 # command-line arguments
 args <- strsplit(commandArgs(trailingOnly = TRUE), "=", fixed = TRUE)
@@ -66,5 +67,6 @@ if (mode %in% c("all", "combine")) {
   save_provenance(cfg)
   save_all_plots(rej, cfg)
   save_summary_plots(rej, cfg)
+  save_main_plots(rej, cfg)
   message("Done. Plots and CSV in ", cfg$output_dir)
 }
