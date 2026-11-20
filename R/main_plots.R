@@ -7,7 +7,19 @@
 #   main3_power.pdf         power (1 vs 2) vs mu3 / sigma3, delta = 0.5, n1 = n2 = 50
 #   main4_dgps.pdf          densities of the location and scale group-3 families
 
-library(unibeCols)
+# unibeCols may be missing (e.g. on the cluster): fall back to plain colours
+# so master.R never fails just because of the palette.
+if (requireNamespace("unibeCols", quietly = TRUE)) {
+  library(unibeCols)
+} else {
+  message("unibeCols not installed: using fallback colours in main plots")
+  unibeSaphire <- function() "#1F5FA6"
+  unibeRed     <- function() "#E3001B"
+  unibeApricot <- function() "#F29F05"
+  unibeOcean   <- function() "#00A0B0"
+  unibeGrey    <- function() "#7F7F7F"
+  unibeGreenS  <- function() c("#CFE3D4", "#A3C9AE", "#6FAA80", "#3F8A58", "#1E6B3C")
+}
 
 # Same colour + shape per method in every figure.
 main_methods <- c("Wilcoxon", "Dunn", "KW two-step", "KW + Wilcoxon", "KW")
